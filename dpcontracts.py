@@ -545,7 +545,7 @@ def build_call(func, *args, **kwargs):
     named, vargs, _, defs, kwonly, kwonlydefs, _ = getfullargspec(func)
 
     nonce = object()
-    actual = dict((name, nonce) for name in named)
+    actual = AttributeDict((name, nonce) for name in named)
 
     defs = defs or ()
     kwonlydefs = kwonlydefs or {}
@@ -563,11 +563,11 @@ def build_call(func, *args, **kwargs):
         if value is nonce:
             raise TypeError("%s missing required positional argument: '%s'" % (func.__name__, name))
 
-    return tuple_of_dict(actual)
+    return actual
 
-def tuple_of_dict(dictionary, name="Args"):
-    assert isinstance(dictionary, dict), "dictionary must be a dict instance"
-    return namedtuple(name, dictionary.keys())(**dictionary)
+class AttributeDict(dict): 
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
 
 def arg_count(func):
     named, vargs, _, defs, kwonly, kwonlydefs, _ = getfullargspec(func)
@@ -606,7 +606,7 @@ def condition(description, predicate, precondition=False, postcondition=False, i
                 elif postcondition:
                     check = None
                     if arg_count(predicate) == 3:
-                        check = predicate(rargs, result, tuple_of_dict(preserved_values))
+                        check = predicate(rargs, result, AttributeDict(preserved_values))
                     else:
                         check = predicate(rargs, result)
                     if not check:
@@ -633,7 +633,7 @@ def condition(description, predicate, precondition=False, postcondition=False, i
                 elif postcondition:
                     check = None
                     if arg_count(predicate) == 3:
-                        check = predicate(rargs, result, tuple_of_dict(preserved_values))
+                        check = predicate(rargs, result, AttributeDict(preserved_values))
                     else:
                         check = predicate(rargs, result)
                     if not check:
@@ -669,7 +669,8 @@ def require(arg1, arg2=None):
     return condition(description, predicate, True, False)
 
 def rewrite(args, **kwargs):
-    return args._replace(**kwargs)
+    args.update(kwargs)
+    return args
 
 def preserve(preserver):
     assert isfunction(preserver), "preservers must be functions"
@@ -694,7 +695,7 @@ def transform(transformer):
         @wraps(f)
         def inner(*args, **kwargs):
             rargs = transformer(build_call(f, *args, **kwargs))
-            return f(**(rargs._asdict()))
+            return f(**rargs)
         return inner
     return func
 
